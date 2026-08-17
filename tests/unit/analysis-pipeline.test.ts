@@ -143,7 +143,7 @@ describe("analysis pipeline orchestration", () => {
       ),
     );
     const started: Array<[AnalysisPassId, number]> = [];
-    const failed: Array<[AnalysisPassId, number, string]> = [];
+    const failed: Array<[AnalysisPassId, number, string, number | undefined]> = [];
     const skipped: AnalysisPassId[] = [];
 
     const pending = executeDesignPipeline(designSnapshot(), {
@@ -162,8 +162,8 @@ describe("analysis pipeline orchestration", () => {
         onAttemptStarted: ({ passId, attemptNumber }) => {
           started.push([passId, attemptNumber]);
         },
-        onAttemptFailed: ({ passId, attemptNumber, error }) => {
-          failed.push([passId, attemptNumber, error.code]);
+        onAttemptFailed: ({ passId, attemptNumber, error, responseMetadata }) => {
+          failed.push([passId, attemptNumber, error.code, responseMetadata?.usage?.totalTokens]);
         },
         onPassSkipped: ({ passId }) => {
           skipped.push(passId);
@@ -177,7 +177,7 @@ describe("analysis pipeline orchestration", () => {
       ["D1", 1],
       ["D1", 2],
     ]);
-    expect(failed).toEqual([["D1", 1, "invalid_structure"]]);
+    expect(failed).toEqual([["D1", 1, "invalid_structure", 0]]);
     expect(skipped).toEqual(["D3"]);
     expect(calls).toEqual(["D1", "D1", "D2", "D4", "D5", "D6"]);
     expect(result.passOutputs).not.toHaveProperty("D3");
@@ -280,12 +280,18 @@ describe("analysis pipeline orchestration", () => {
 
 describe("OpenAI structured request boundary", () => {
   it("always sends store:false and serialises only the supplied image bytes", async () => {
-    const parse = vi.fn().mockResolvedValue({
+    const create = vi.fn().mockResolvedValue({
       status: "completed",
       output: [],
-      output_parsed: { answer: "grounded" },
+      output_text: JSON.stringify({ answer: "grounded" }),
       _request_id: "request-1",
-      usage: { input_tokens: 8, output_tokens: 2, total_tokens: 10 },
+      usage: {
+        input_tokens: 8,
+        input_tokens_details: { cached_tokens: 3, cache_write_tokens: 1 },
+        output_tokens: 2,
+        output_tokens_details: { reasoning_tokens: 1 },
+        total_tokens: 10,
+      },
     });
     const gateway = new OpenAIModelGateway({
       apiKey: "test-key",
@@ -294,7 +300,7 @@ describe("OpenAI structured request boundary", () => {
       timeoutMs: 1_000,
     });
     Object.defineProperty(gateway, "client", {
-      value: { responses: { parse } },
+      value: { responses: { create } },
     });
     const schema = z.object({ answer: z.string() }).strict();
 
@@ -323,9 +329,17 @@ describe("OpenAI structured request boundary", () => {
       data: { answer: "grounded" },
       model: "vision-model",
       requestId: "request-1",
+      usage: {
+        inputTokens: 8,
+        cachedInputTokens: 3,
+        cacheWriteInputTokens: 1,
+        outputTokens: 2,
+        reasoningOutputTokens: 1,
+        totalTokens: 10,
+      },
     });
-    expect(parse).toHaveBeenCalledOnce();
-    const [payload] = parse.mock.calls[0]!;
+    expect(create).toHaveBeenCalledOnce();
+    const [payload] = create.mock.calls[0]!;
     expect(payload).toMatchObject({
       model: "vision-model",
       store: false,

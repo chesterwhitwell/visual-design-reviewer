@@ -14,6 +14,7 @@ import {
   type AnalysisRunRow,
   type PassAttemptRow,
 } from "@/lib/db";
+import { estimateOpenAICost } from "@/lib/openai/pricing";
 import {
   ANALYSIS_SCHEMA_VERSION,
   parseDesignAnalysisRow,
@@ -281,7 +282,7 @@ function createPersistenceObserver(
     onPassCompleted(event) {
       const attempt = activeAttempts.get(event.passId);
       if (!attempt) throw new AppError("database_error", "The active pass attempt was lost.");
-      const usage = completeUsage(event.result.usage);
+      const usage = completeUsage(event.result.usage, event.result.model);
       repositories.analysisRuns.completePassAttempt(attempt.id, {
         validatedOutput: event.output,
         durationMs: event.durationMs,
@@ -308,6 +309,12 @@ function createPersistenceObserver(
       repositories.analysisRuns.failPassAttempt(attempt.id, {
         failure: event.error,
         durationMs: event.durationMs,
+        responseReceivedAt: event.responseMetadata ? event.failedAt : null,
+        apiRequestId: event.responseMetadata?.requestId,
+        usage: completeUsage(
+          event.responseMetadata?.usage,
+          event.responseMetadata?.model ?? attempt.model,
+        ),
       });
       activeAttempts.delete(event.passId);
       logger.warn({
@@ -455,8 +462,20 @@ function buildPassProvenance(
       attempt.totalTokens !== null
         ? {
             inputTokens: attempt.inputTokens,
+            ...(attempt.cachedInputTokens !== null
+              ? { cachedInputTokens: attempt.cachedInputTokens }
+              : {}),
+            ...(attempt.cacheWriteInputTokens !== null
+              ? { cacheWriteInputTokens: attempt.cacheWriteInputTokens }
+              : {}),
             outputTokens: attempt.outputTokens,
+            ...(attempt.reasoningOutputTokens !== null
+              ? { reasoningOutputTokens: attempt.reasoningOutputTokens }
+              : {}),
             totalTokens: attempt.totalTokens,
+            ...(attempt.estimatedCostMicroUsd !== null
+              ? { estimatedCostMicroUsd: attempt.estimatedCostMicroUsd }
+              : {}),
           }
         : undefined;
     return {
@@ -477,9 +496,12 @@ function buildPassProvenance(
 
 function completeUsage(usage: {
   inputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteInputTokens?: number;
   outputTokens?: number;
+  reasoningOutputTokens?: number;
   totalTokens?: number;
-} | undefined) {
+} | undefined, model: string) {
   if (
     usage?.inputTokens === undefined ||
     usage.outputTokens === undefined ||
@@ -487,11 +509,27 @@ function completeUsage(usage: {
   ) {
     return undefined;
   }
-  return {
+  const complete = {
     inputTokens: usage.inputTokens,
+    cachedInputTokens: usage.cachedInputTokens ?? 0,
+    cacheWriteInputTokens: usage.cacheWriteInputTokens ?? 0,
     outputTokens: usage.outputTokens,
+    reasoningOutputTokens: usage.reasoningOutputTokens ?? 0,
     totalTokens: usage.totalTokens,
   };
+  try {
+    const estimate = estimateOpenAICost(model, complete);
+    return estimate
+      ? {
+          ...complete,
+          estimatedCostMicroUsd: estimate.estimatedCostMicroUsd,
+          pricingSnapshot: { ...estimate.pricingSnapshot },
+        }
+      : complete;
+  } catch {
+    logger.warn({ event: "analysis.pricing_unavailable", model, errorCode: "pricing_invalid" });
+    return complete;
+  }
 }
 
 function promptSetVersion(

@@ -317,8 +317,12 @@ export function analysisRunDto(detail: AnalysisRunDetail) {
           attempt.totalTokens !== null
             ? {
                 inputTokens: attempt.inputTokens,
+                cachedInputTokens: attempt.cachedInputTokens ?? 0,
+                cacheWriteInputTokens: attempt.cacheWriteInputTokens ?? 0,
                 outputTokens: attempt.outputTokens,
+                reasoningOutputTokens: attempt.reasoningOutputTokens ?? 0,
                 totalTokens: attempt.totalTokens,
+                estimatedCostMicroUsd: attempt.estimatedCostMicroUsd,
               }
             : null,
       })),

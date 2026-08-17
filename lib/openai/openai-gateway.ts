@@ -69,7 +69,7 @@ export class OpenAIModelGateway implements ModelGateway {
     ];
 
     try {
-      const response = await this.client.responses.parse(
+      const response = await this.client.responses.create(
         {
           model,
           store: false,
@@ -88,6 +88,22 @@ export class OpenAIModelGateway implements ModelGateway {
         },
         { signal: request.signal },
       );
+
+      const metadata = {
+        model,
+        requestId: response._request_id ?? undefined,
+        usage: response.usage
+          ? {
+              inputTokens: response.usage.input_tokens,
+              cachedInputTokens: response.usage.input_tokens_details.cached_tokens,
+              cacheWriteInputTokens: response.usage.input_tokens_details.cache_write_tokens,
+              outputTokens: response.usage.output_tokens,
+              reasoningOutputTokens: response.usage.output_tokens_details.reasoning_tokens,
+              totalTokens: response.usage.total_tokens,
+            }
+          : undefined,
+      };
+      request.onResponseMetadata?.(metadata);
 
       const refusal = response.output
         .filter((item) => item.type === "message")
@@ -108,7 +124,7 @@ export class OpenAIModelGateway implements ModelGateway {
         );
       }
 
-      if (response.output_parsed === null || response.output_parsed === undefined) {
+      if (!response.output_text) {
         throw new AppError(
           "upstream_invalid_output",
           "The model returned no schema-valid analysis output.",
@@ -117,16 +133,8 @@ export class OpenAIModelGateway implements ModelGateway {
       }
 
       return {
-        data: request.schema.parse(response.output_parsed),
-        model,
-        requestId: response._request_id ?? undefined,
-        usage: response.usage
-          ? {
-              inputTokens: response.usage.input_tokens,
-              outputTokens: response.usage.output_tokens,
-              totalTokens: response.usage.total_tokens,
-            }
-          : undefined,
+        data: request.schema.parse(JSON.parse(response.output_text)),
+        ...metadata,
       };
     } catch (error) {
       throw classifyOpenAIError(error);

@@ -29,6 +29,13 @@
       "when": 1786856155418,
       "tag": "0003_image_analysis_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1786958162105,
+      "tag": "0004_aromatic_wendigo",
+      "breakpoints": true
     }
   ]
 }

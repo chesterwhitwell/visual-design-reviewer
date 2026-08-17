@@ -4,4 +4,5 @@ export * from "./exports";
 export * from "./images";
 export * from "./retention";
 export * from "./review-deletion";
+export * from "./admin";
 export * from "./reviews";

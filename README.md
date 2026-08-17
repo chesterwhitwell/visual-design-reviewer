@@ -13,6 +13,9 @@ The application is designed for one trusted user on a local machine or trusted L
 - AES-256-GCM encryption for retained, sanitised images and previews.
 - SQLite persistence with idempotent Drizzle migrations.
 - A reusable assessment-criteria library with versioned JSON import and export.
+- Optional single-administrator password authentication with revocable sessions.
+- Per-pass token metering, immutable USD price snapshots, and local cost estimates.
+- A protected administration page for configuration, usage, storage, and diagnostics.
 - Deterministic Integrated Review and completed-artifact Markdown/JSON exports. Neither adds another model call.
 - A non-root, read-only Docker runtime with a persistent data volume.
 
@@ -113,7 +116,28 @@ The server listens on port `3080`. To open it from another device, add the Docke
 ALLOWED_HOSTS=localhost,127.0.0.1,[::1],192.168.1.20,design-review.local
 ```
 
-Restart the process or container after changing `.env`. Host validation is a defence-in-depth check, not authentication. The application has no accounts, login, or TLS termination, so restrict port `3080` with the host firewall and network configuration. Do not publish it directly to the internet. If broader access is required, put it behind an authenticated HTTPS reverse proxy and reassess the single-user threat model.
+Restart the process or container after changing `.env`. Host validation is a defence-in-depth check, not authentication. The application has no TLS termination and its default authentication mode is disabled, so restrict port `3080` with the host firewall and network configuration. Do not publish an unauthenticated instance directly to the internet. If broader access is required, enable password authentication and put it behind an HTTPS reverse proxy.
+
+## Password authentication
+
+Authentication is disabled by default for compatibility with trusted local installations. To enable the single-administrator password mode, generate a password hash and random session secret:
+
+```sh
+npm run auth:setup
+```
+
+The password prompt does not echo typed characters. Copy the generated `AUTH_*` values into `.env` or the Unraid container variables and restart the service. For a prebuilt container, the same generator is included in the image:
+
+```sh
+docker run --rm -it --entrypoint node chesterwhitwell/visual-design-reviewer:latest \
+  scripts/generate-auth.mjs
+```
+
+Password mode uses a salted scrypt password hash and random, signed, database-backed sessions. Session cookies are `HttpOnly` and `SameSite=Lax`; `AUTH_COOKIE_SECURE=auto` adds the `Secure` attribute when the request is served through HTTPS. The Administration page can revoke every active session.
+
+Direct HTTP does not encrypt a password or session while it crosses the network. Use only a trusted LAN for HTTP. For remote or less-trusted access, place the application behind an HTTPS reverse proxy, preserve the original `Host`, replace `X-Forwarded-Proto` and `X-Forwarded-For`, set `AUTH_TRUST_PROXY_HEADERS=true`, and keep the public hostname in `ALLOWED_HOSTS`. Never enable proxy-header trust when clients can connect directly to the application port.
+
+Google or other OpenID Connect login is not implemented yet. The current session records include a provider boundary so an OIDC adapter can be added later without changing review ownership; this remains a shared, single-administrator installation rather than a multi-tenant service.
 
 ## OpenAI model and data configuration
 
@@ -135,6 +159,20 @@ Keep `OPENAI_API_KEY` server-side and never rename it with a `NEXT_PUBLIC_` pref
 Every analysis request explicitly sets `store: false`. That setting is not the same as Zero Data Retention. OpenAI states that standard API abuse-monitoring logs may contain customer content and are retained for up to 30 days by default; Zero Data Retention and Modified Abuse Monitoring require eligibility and prior approval. `OPENAI_DATA_MODE=zdr` is only an installation label and cannot verify the organisation or project setting. Review the current [OpenAI API data controls documentation](https://developers.openai.com/api/docs/guides/your-data) before submitting sensitive material.
 
 Images are sent to the configured OpenAI model for analysis. The local encryption described below protects data at rest on this installation; it does not make the model call local or offline.
+
+## Token usage and cost estimates
+
+Every OpenAI response records input, cached input, cache-write input, output, reasoning-output, and total tokens when the provider returns them. Usage is retained for successful and unsuccessful attempts, including retries after schema or semantic validation failures. Requests that fail before a provider response may have no usage metadata.
+
+The bundled `config/openai-pricing.v1.json` catalogue contains versioned USD rates for supported model IDs. The application copies the applicable rate and multiplier snapshot into each attempt, so later catalogue changes do not rewrite historical estimates. Unknown models remain visibly unpriced. The Administration page shows lifetime totals and model breakdowns, while completed analysis provenance shows per-pass tokens and estimated cost.
+
+These values are local estimates rather than an OpenAI invoice. Credits, tax, account-specific terms, future pricing changes, and usage from other applications are outside this calculation. Review the source and effective date in the pricing catalogue before relying on the totals.
+
+## Administration and diagnostics
+
+Select the gear in the application header to open `/admin`. It reports configuration readiness, authentication and HTTPS warnings, run state, recent safe failures, database and encrypted-storage sizes, retention state, token usage, and estimated cost. From this page an administrator can test OpenAI, run a bounded retention sweep, run SQLite `quick_check`, revoke all sessions, or download a redacted diagnostics JSON file.
+
+Diagnostics never include API keys, encryption keys, password hashes, session tokens, images, prompts, or raw model responses. `/api/health` remains a deliberately minimal unauthenticated container liveness endpoint.
 
 ## Final work and development evidence
 
@@ -205,6 +243,7 @@ Back up the SQLite database, encrypted image directory, taxonomy file, and encry
 ```sh
 npm run dev          # development server on port 3080
 npm run db:migrate   # apply pending SQLite migrations
+npm run auth:setup   # generate password-authentication environment values
 npm run lint         # ESLint and Next.js rules
 npm run typecheck    # TypeScript without emission
 npm test             # unit and integration tests
@@ -221,7 +260,7 @@ The `.env.example` file documents the server-enforced defaults for image count, 
 
 ## Current limitations
 
-- This is a single-process, single-user application. It does not provide authentication, authorisation, collaboration, or tenant isolation.
+- Password mode protects one shared administrator workspace; it does not provide per-user ownership, roles, collaboration, or tenant isolation. Google/OIDC login is not implemented yet.
 - Analysis requires network access to OpenAI and valid project access to both configured models; it is not an offline evaluator.
 - The explicit `fake` gateway is test-only and cannot create saved review findings.
 - Automatic expiry is opportunistic rather than scheduled: startup and health requests run bounded sweeps, so installations that disable health polling should invoke the health endpoint or restart the service after expiries become due.
@@ -230,3 +269,4 @@ The `.env.example` file documents the server-enforced defaults for image count, 
 - Markdown and JSON exports include completed structured analyses only; failed, cancelled, queued, and running passes are deliberately excluded.
 - Secure deletion cannot guarantee erasure from storage snapshots, backups, or device-level remapping.
 - Availability, latency, rate limits, feature support, and cost remain properties of the configured OpenAI project and model.
+- Displayed API costs are local USD estimates from captured token usage and versioned configured rates, not provider invoices.

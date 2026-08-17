@@ -155,8 +155,12 @@ export type PassProvenance = {
   };
   usage?: {
     inputTokens?: number;
+    cachedInputTokens?: number;
+    cacheWriteInputTokens?: number;
     outputTokens?: number;
+    reasoningOutputTokens?: number;
     totalTokens?: number;
+    estimatedCostMicroUsd?: number;
   };
 };
 

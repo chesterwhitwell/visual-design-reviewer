@@ -18,6 +18,11 @@ export interface SafeFailure {
 
 export interface UsageMetadata {
   inputTokens?: number | null;
+  cachedInputTokens?: number | null;
+  cacheWriteInputTokens?: number | null;
   outputTokens?: number | null;
+  reasoningOutputTokens?: number | null;
   totalTokens?: number | null;
+  estimatedCostMicroUsd?: number | null;
+  pricingSnapshot?: Record<string, unknown> | null;
 }

@@ -514,8 +514,12 @@ export const PassCompletionStateSchema = z.enum(["completed", "skipped"]);
 export const TokenUsageSchema = z
   .object({
     inputTokens: z.number().int().nonnegative(),
+    cachedInputTokens: z.number().int().nonnegative().optional(),
+    cacheWriteInputTokens: z.number().int().nonnegative().optional(),
     outputTokens: z.number().int().nonnegative(),
+    reasoningOutputTokens: z.number().int().nonnegative().optional(),
     totalTokens: z.number().int().nonnegative(),
+    estimatedCostMicroUsd: z.number().int().nonnegative().optional(),
   })
   .strict()
   .superRefine((usage, context) => {
@@ -524,6 +528,20 @@ export const TokenUsageSchema = z
         code: "custom",
         message: "totalTokens must equal inputTokens plus outputTokens",
         path: ["totalTokens"],
+      });
+    }
+    if ((usage.cachedInputTokens ?? 0) + (usage.cacheWriteInputTokens ?? 0) > usage.inputTokens) {
+      context.addIssue({
+        code: "custom",
+        message: "cached and cache-write tokens cannot exceed inputTokens",
+        path: ["cachedInputTokens"],
+      });
+    }
+    if ((usage.reasoningOutputTokens ?? 0) > usage.outputTokens) {
+      context.addIssue({
+        code: "custom",
+        message: "reasoningOutputTokens cannot exceed outputTokens",
+        path: ["reasoningOutputTokens"],
       });
     }
   });

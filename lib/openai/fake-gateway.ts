@@ -27,11 +27,22 @@ export class FakeModelGateway implements ModelGateway {
     }
 
     const output = await handler(request as StructuredModelRequest<z.ZodType>);
-    return {
-      data: request.schema.parse(output),
+    const metadata = {
       model: this.modelName,
       requestId: `fake-${request.passId}`,
-      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      usage: {
+        inputTokens: 0,
+        cachedInputTokens: 0,
+        cacheWriteInputTokens: 0,
+        outputTokens: 0,
+        reasoningOutputTokens: 0,
+        totalTokens: 0,
+      },
+    };
+    request.onResponseMetadata?.(metadata);
+    return {
+      data: request.schema.parse(output),
+      ...metadata,
     };
   }
 }

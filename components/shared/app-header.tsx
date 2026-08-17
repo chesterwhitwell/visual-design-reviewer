@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { EyeMark, SettingsIcon } from "@/components/shared/icons";
+import { AuthControls } from "@/components/auth/auth-controls";
 
 export function AppHeader({ status = "Configuration needed" }: { status?: string }) {
   const ready = status === "API ready";
@@ -18,7 +19,8 @@ export function AppHeader({ status = "Configuration needed" }: { status?: string
           <span className={`status-dot ${ready ? "ready" : "warning"}`} />
           {status}
         </span>
-        <Link className="button button-ghost" href="/settings" aria-label="Settings">
+        <AuthControls />
+        <Link className="button button-ghost" href="/admin" aria-label="Administration">
           <SettingsIcon />
         </Link>
       </div>

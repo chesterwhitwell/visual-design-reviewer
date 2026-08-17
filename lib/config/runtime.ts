@@ -13,6 +13,8 @@ const optionalPositiveInteger = z.preprocess(
   z.coerce.number().int().positive().optional(),
 );
 
+const booleanString = z.enum(["true", "false"]).transform((value) => value === "true");
+
 const runtimeEnvironmentSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_PATH: z.string().trim().min(1).default("data/reviewer.db"),
@@ -28,6 +30,14 @@ const runtimeEnvironmentSchema = z.object({
     .default("medium"),
   ANALYSIS_GATEWAY: z.enum(["openai", "fake"]).default("openai"),
   ALLOWED_HOSTS: z.string().default("localhost,127.0.0.1,[::1]"),
+  AUTH_MODE: z.enum(["disabled", "password"]).default("disabled"),
+  AUTH_USERNAME: z.string().trim().min(1).max(100).default("admin"),
+  AUTH_PASSWORD_HASH: optionalTrimmedString,
+  AUTH_SESSION_SECRET: optionalTrimmedString,
+  AUTH_SESSION_HOURS: z.coerce.number().int().min(1).max(720).default(12),
+  AUTH_COOKIE_SECURE: z.enum(["auto", "always", "never"]).default("auto"),
+  AUTH_TRUST_PROXY_HEADERS: booleanString.default(false),
+  OPENAI_PRICING_PATH: z.string().trim().min(1).default("config/openai-pricing.v1.json"),
   MAX_IMAGES_PER_REVIEW: positiveInteger(10),
   MAX_IMAGE_BYTES: positiveInteger(25 * 1024 * 1024),
   MAX_TOTAL_IMAGE_BYTES: positiveInteger(100 * 1024 * 1024),
@@ -68,6 +78,16 @@ export type RuntimeConfig = {
     | "max";
   analysisGateway: "openai" | "fake";
   allowedHosts: string[];
+  auth: {
+    mode: "disabled" | "password";
+    username: string;
+    passwordHash?: string;
+    sessionSecret?: string;
+    sessionHours: number;
+    cookieSecure: "auto" | "always" | "never";
+    trustProxyHeaders: boolean;
+  };
+  openaiPricingPath: string;
   limits: {
     imagesPerReview: number;
     imageBytes: number;
@@ -112,6 +132,16 @@ export function loadRuntimeConfig(
     allowedHosts: parsed.ALLOWED_HOSTS.split(",")
       .map((host) => host.trim().toLowerCase())
       .filter(Boolean),
+    auth: {
+      mode: parsed.AUTH_MODE,
+      username: parsed.AUTH_USERNAME,
+      passwordHash: parsed.AUTH_PASSWORD_HASH,
+      sessionSecret: parsed.AUTH_SESSION_SECRET,
+      sessionHours: parsed.AUTH_SESSION_HOURS,
+      cookieSecure: parsed.AUTH_COOKIE_SECURE,
+      trustProxyHeaders: parsed.AUTH_TRUST_PROXY_HEADERS,
+    },
+    openaiPricingPath: parsed.OPENAI_PRICING_PATH,
     limits: {
       imagesPerReview: parsed.MAX_IMAGES_PER_REVIEW,
       imageBytes: parsed.MAX_IMAGE_BYTES,

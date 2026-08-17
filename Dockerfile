@@ -34,6 +34,7 @@ COPY --from=builder --chown=reviewer:reviewer /app/.next/static ./.next/static
 COPY --from=builder --chown=reviewer:reviewer /app/public ./public
 COPY --from=builder --chown=reviewer:reviewer /app/config ./config
 COPY --from=builder --chown=reviewer:reviewer /app/lib/db/migrations ./lib/db/migrations
+COPY --from=builder --chown=reviewer:reviewer /app/scripts/generate-auth.mjs ./scripts/generate-auth.mjs
 
 USER reviewer
 EXPOSE 3080

@@ -741,8 +741,13 @@ export class AnalysisRunRepository {
           apiStatusCode: input.apiStatusCode ?? null,
           apiRequestId: input.apiRequestId ?? null,
           inputTokens: input.usage?.inputTokens ?? null,
+          cachedInputTokens: input.usage?.cachedInputTokens ?? null,
+          cacheWriteInputTokens: input.usage?.cacheWriteInputTokens ?? null,
           outputTokens: input.usage?.outputTokens ?? null,
+          reasoningOutputTokens: input.usage?.reasoningOutputTokens ?? null,
           totalTokens: input.usage?.totalTokens ?? null,
+          estimatedCostMicroUsd: input.usage?.estimatedCostMicroUsd ?? null,
+          pricingSnapshot: input.usage?.pricingSnapshot ?? null,
         })
         .where(and(eq(passAttempts.id, attemptId), eq(passAttempts.state, "running")))
         .returning()
@@ -797,8 +802,13 @@ export class AnalysisRunRepository {
           apiStatusCode: input.apiStatusCode ?? null,
           apiRequestId: input.apiRequestId ?? null,
           inputTokens: input.usage?.inputTokens ?? null,
+          cachedInputTokens: input.usage?.cachedInputTokens ?? null,
+          cacheWriteInputTokens: input.usage?.cacheWriteInputTokens ?? null,
           outputTokens: input.usage?.outputTokens ?? null,
+          reasoningOutputTokens: input.usage?.reasoningOutputTokens ?? null,
           totalTokens: input.usage?.totalTokens ?? null,
+          estimatedCostMicroUsd: input.usage?.estimatedCostMicroUsd ?? null,
+          pricingSnapshot: input.usage?.pricingSnapshot ?? null,
         })
         .where(and(eq(passAttempts.id, attemptId), eq(passAttempts.state, "running")))
         .returning()

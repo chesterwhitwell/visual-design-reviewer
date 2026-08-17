@@ -2383,7 +2383,7 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: 70px 100px minmax(100px, 1fr) 62px;
+  grid-template-columns: 70px 100px minmax(100px, 1fr) minmax(120px, auto);
   padding: 7px 9px;
 }
 
