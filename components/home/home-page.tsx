@@ -8,6 +8,7 @@ import { CriteriaSetsDialog } from "@/components/review-workspace/criteria-sets-
 import type { Criterion } from "@/components/review-workspace/types";
 import { AppHeader } from "@/components/shared/app-header";
 import { DeleteReviewDialog } from "@/components/shared/delete-review-dialog";
+import { ReviewUsage, type ReviewUsageSummary } from "@/components/shared/review-usage";
 import {
   ArrowRightIcon,
   CloseIcon,
@@ -24,6 +25,7 @@ type ReviewListItem = {
   imageCount: number;
   designAnalysisCount: number;
   criteriaAnalysisCount: number;
+  analysisUsage: ReviewUsageSummary;
   updatedAt: string;
 };
 
@@ -219,6 +221,7 @@ export function HomePage() {
                       <span>·</span>
                       <span>{review.designAnalysisCount + review.criteriaAnalysisCount} analyses</span>
                     </div>
+                    <ReviewUsage usage={review.analysisUsage} />
                   </Link>
                   <button
                     aria-label={`Delete ${review.title || "Untitled review"}`}

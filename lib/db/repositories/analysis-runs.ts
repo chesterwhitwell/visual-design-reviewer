@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, lt, max } from "drizzle-orm";
+import { and, asc, eq, inArray, lt, max, sql } from "drizzle-orm";
 
 import type { AppDatabase } from "../client";
 import {
@@ -63,6 +63,14 @@ export interface AnalysisPassWithAttempts extends AnalysisPassRow {
 
 export interface AnalysisRunDetail extends AnalysisRunRow {
   passes: AnalysisPassWithAttempts[];
+}
+
+export interface ReviewAnalysisUsage {
+  reviewId: string;
+  totalTokens: number;
+  estimatedCostMicroUsd: number;
+  meteredAttempts: number;
+  unpricedAttempts: number;
 }
 
 export interface BeginPassAttemptInput {
@@ -288,6 +296,37 @@ export class AnalysisRunRepository {
       .where(eq(analysisRuns.reviewId, reviewId))
       .orderBy(asc(analysisRuns.createdAt))
       .all();
+  }
+
+  listUsageByReviewIds(reviewIds: readonly string[]): ReviewAnalysisUsage[] {
+    if (reviewIds.length === 0) return [];
+
+    return this.db
+      .select({
+        reviewId: analysisRuns.reviewId,
+        totalTokens: sql<number>`coalesce(sum(${passAttempts.totalTokens}), 0)`,
+        estimatedCostMicroUsd: sql<number>`coalesce(sum(${passAttempts.estimatedCostMicroUsd}), 0)`,
+        meteredAttempts: sql<number>`coalesce(sum(case when ${passAttempts.totalTokens} is not null then 1 else 0 end), 0)`,
+        unpricedAttempts: sql<number>`coalesce(sum(case when ${passAttempts.totalTokens} > 0 and ${passAttempts.estimatedCostMicroUsd} is null then 1 else 0 end), 0)`,
+      })
+      .from(analysisRuns)
+      .innerJoin(analysisPasses, eq(analysisPasses.runId, analysisRuns.id))
+      .innerJoin(passAttempts, eq(passAttempts.passId, analysisPasses.id))
+      .where(inArray(analysisRuns.reviewId, [...reviewIds]))
+      .groupBy(analysisRuns.reviewId)
+      .all();
+  }
+
+  getUsageByReview(reviewId: string): ReviewAnalysisUsage {
+    return (
+      this.listUsageByReviewIds([reviewId])[0] ?? {
+        reviewId,
+        totalTokens: 0,
+        estimatedCostMicroUsd: 0,
+        meteredAttempts: 0,
+        unpricedAttempts: 0,
+      }
+    );
   }
 
   getWithPasses(runId: string): AnalysisRunWithPasses | null {

@@ -751,6 +751,14 @@ p {
   margin-top: auto;
 }
 
+.review-usage {
+  color: var(--ink-faint);
+  display: block;
+  font-size: 12px;
+  line-height: 1.45;
+  margin-top: 7px;
+}
+
 .mini-badge {
   background: #eff1ed;
   border-radius: 999px;

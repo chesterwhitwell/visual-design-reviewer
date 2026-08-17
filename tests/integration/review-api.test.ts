@@ -35,6 +35,12 @@ type ReviewBody = {
     id: string;
     title: string | null;
     context: string | null;
+    analysisUsage: {
+      totalTokens: number;
+      estimatedCostMicroUsd: number;
+      meteredAttempts: number;
+      unpricedAttempts: number;
+    };
     images: Array<{
       id: string;
       order: number;
@@ -111,7 +117,19 @@ describe("review API routes", () => {
     const list = await listReviews(readRequest("/api/reviews"));
     expect(list.status).toBe(200);
     await expect(list.json()).resolves.toMatchObject({
-      reviews: [{ id: reviewId, title: "Campaign poster", imageCount: 0 }],
+      reviews: [
+        {
+          id: reviewId,
+          title: "Campaign poster",
+          imageCount: 0,
+          analysisUsage: {
+            totalTokens: 0,
+            estimatedCostMicroUsd: 0,
+            meteredAttempts: 0,
+            unpricedAttempts: 0,
+          },
+        },
+      ],
     });
     expect(list.headers.get("cache-control")).toContain("no-store");
 
@@ -128,6 +146,12 @@ describe("review API routes", () => {
       id: reviewId,
       title: "Campaign poster v2",
       context: null,
+      analysisUsage: {
+        totalTokens: 0,
+        estimatedCostMicroUsd: 0,
+        meteredAttempts: 0,
+        unpricedAttempts: 0,
+      },
     });
 
     const selections = patchedBody.review.reviewAreas.map((selection, index) => ({

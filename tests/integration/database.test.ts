@@ -313,6 +313,11 @@ describe("SQLite persistence", () => {
       failure: { code: "rate_limit", message: "The model service asked us to retry later." },
       durationMs: 123,
       apiStatusCode: 429,
+      usage: {
+        inputTokens: 4,
+        outputTokens: 2,
+        totalTokens: 6,
+      },
     });
     repositories.analysisRuns.transitionRun("run-1", "failed", {
       code: "pass_failed",
@@ -366,6 +371,22 @@ describe("SQLite persistence", () => {
       pricingSnapshot: { catalogVersion: "test-v1", currency: "USD" },
     });
     expect(detail?.passes[1]?.state).toBe("skipped");
+    expect(repositories.analysisRuns.getUsageByReview("review-1")).toEqual({
+      reviewId: "review-1",
+      totalTokens: 20,
+      estimatedCostMicroUsd: 42,
+      meteredAttempts: 2,
+      unpricedAttempts: 1,
+    });
+    expect(repositories.analysisRuns.listUsageByReviewIds(["review-1", "missing-review"])).toEqual([
+      {
+        reviewId: "review-1",
+        totalTokens: 20,
+        estimatedCostMicroUsd: 42,
+        meteredAttempts: 2,
+        unpricedAttempts: 1,
+      },
+    ]);
     expect(() => repositories.analysisRuns.transitionPass("pass-d1", "running")).toThrow(
       InvalidStateTransitionError,
     );
