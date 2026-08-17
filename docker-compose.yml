@@ -1,0 +1,27 @@
+services:
+  reviewer:
+    build:
+      context: .
+    image: visual-design-reviewer:local
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_PATH: /app/data/reviewer.db
+      IMAGE_STORAGE_PATH: /app/data/images
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "3080:3080"
+    volumes:
+      - reviewer-data:/app/data
+      - ./config/review-taxonomy.v1.json:/app/config/review-taxonomy.v1.json:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  reviewer-data:
