@@ -43,10 +43,14 @@
   margin: 0 0 10px;
 }
 
-.workspaceTitleRow p:last-child {
+.workspaceMeta {
   color: var(--ink-faint);
   font-size: 12px;
   margin: 0;
+}
+
+.workspaceTitleRow :global(.review-usage) {
+  margin-top: 6px;
 }
 
 .workspaceHeaderActions {
@@ -2383,7 +2387,7 @@
   align-items: center;
   display: grid;
   gap: 8px;
-  grid-template-columns: 70px 100px minmax(100px, 1fr) 62px;
+  grid-template-columns: 70px 100px minmax(100px, 1fr) minmax(120px, auto);
   padding: 7px 9px;
 }
 

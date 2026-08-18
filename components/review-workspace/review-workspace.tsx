@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AppHeader } from "@/components/shared/app-header";
 import { DeleteReviewDialog } from "@/components/shared/delete-review-dialog";
+import { ReviewUsage } from "@/components/shared/review-usage";
 
 import { CriteriaEditor } from "./criteria-editor";
 import { CriteriaSetsDialog } from "./criteria-sets-dialog";
@@ -517,7 +518,12 @@ export function ReviewWorkspace({ reviewId }: { reviewId: string }) {
             <div>
               <p className="eyebrow">Active review workspace</p>
               <h1>{review.title || "Untitled review"}</h1>
-              <p>Updated {formatUpdated(review.updatedAt)} · {review.images.length} {review.images.length === 1 ? "image" : "images"} · {review.designAnalyses.length + review.criteriaAnalyses.length} completed analyses</p>
+              <p className={styles.workspaceMeta}>
+                Updated {formatUpdated(review.updatedAt)} · {review.images.length}{" "}
+                {review.images.length === 1 ? "image" : "images"} ·{" "}
+                {review.designAnalyses.length + review.criteriaAnalyses.length} completed analyses
+              </p>
+              <ReviewUsage usage={review.analysisUsage} />
             </div>
             <div className={styles.workspaceHeaderActions}>
               <span className={`${styles.lifecycleBadge} ${review.lifecycle === "closed" ? styles.lifecycleClosed : ""}`}>

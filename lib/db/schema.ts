@@ -232,6 +232,25 @@ export const appSettings = sqliteTable("app_settings", {
   updatedAt: text("updated_at").notNull().default(timestampDefault),
 });
 
+export const authSessions = sqliteTable(
+  "auth_sessions",
+  {
+    tokenHash: text("token_hash").primaryKey(),
+    principalId: text("principal_id").notNull(),
+    displayName: text("display_name").notNull(),
+    provider: text("provider", { enum: ["password", "oidc"] }).notNull(),
+    createdAt: text("created_at").notNull().default(timestampDefault),
+    lastSeenAt: text("last_seen_at").notNull().default(timestampDefault),
+    expiresAt: text("expires_at").notNull(),
+    revokedAt: text("revoked_at"),
+  },
+  (table) => [
+    check("auth_sessions_provider_check", sql`${table.provider} in ('password', 'oidc')`),
+    index("auth_sessions_expiry_idx").on(table.expiresAt),
+    index("auth_sessions_principal_idx").on(table.principalId, table.revokedAt),
+  ],
+);
+
 export const analysisRuns = sqliteTable(
   "analysis_runs",
   {
@@ -351,8 +370,13 @@ export const passAttempts = sqliteTable(
     apiStatusCode: integer("api_status_code"),
     apiRequestId: text("api_request_id"),
     inputTokens: integer("input_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    cacheWriteInputTokens: integer("cache_write_input_tokens"),
     outputTokens: integer("output_tokens"),
+    reasoningOutputTokens: integer("reasoning_output_tokens"),
     totalTokens: integer("total_tokens"),
+    estimatedCostMicroUsd: integer("estimated_cost_micro_usd"),
+    pricingSnapshot: text("pricing_snapshot_json", { mode: "json" }).$type<JsonSnapshot>(),
     validatedOutput: text("validated_output_json", { mode: "json" }).$type<unknown>(),
     startedAt: text("started_at").notNull().default(timestampDefault),
     responseReceivedAt: text("response_received_at"),
@@ -369,6 +393,16 @@ export const passAttempts = sqliteTable(
     check(
       "pass_attempts_duration_check",
       sql`${table.durationMs} is null or ${table.durationMs} >= 0`,
+    ),
+    check(
+      "pass_attempts_usage_check",
+      sql`(${table.inputTokens} is null or ${table.inputTokens} >= 0)
+        and (${table.cachedInputTokens} is null or ${table.cachedInputTokens} >= 0)
+        and (${table.cacheWriteInputTokens} is null or ${table.cacheWriteInputTokens} >= 0)
+        and (${table.outputTokens} is null or ${table.outputTokens} >= 0)
+        and (${table.reasoningOutputTokens} is null or ${table.reasoningOutputTokens} >= 0)
+        and (${table.totalTokens} is null or ${table.totalTokens} >= 0)
+        and (${table.estimatedCostMicroUsd} is null or ${table.estimatedCostMicroUsd} >= 0)`,
     ),
     index("pass_attempts_pass_idx").on(table.passId, table.attemptNumber),
   ],
@@ -453,3 +487,4 @@ export type PassAttemptRow = typeof passAttempts.$inferSelect;
 export type DesignAnalysisRow = typeof designAnalyses.$inferSelect;
 export type CriteriaAnalysisRow = typeof criteriaAnalyses.$inferSelect;
 export type CriteriaSetRow = typeof criteriaSets.$inferSelect;
+export type AuthSessionRow = typeof authSessions.$inferSelect;

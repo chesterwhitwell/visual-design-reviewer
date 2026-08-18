@@ -6,6 +6,7 @@ import type {
   CriterionResult,
   DesignAnalysis,
   DesignFinding,
+  PassProvenance,
   ResultTab,
   SynthesisStatement,
 } from "./types";
@@ -530,7 +531,13 @@ function ProvenanceList({ items, schemaVersion, promptVersion }: { items: NonNul
           <strong>{item.passId ?? item.passKey ?? `Pass ${index + 1}`}</strong>
           <span className={styles.passComplete}>{humanise(item.state)}</span>
           <span>{item.modelConfiguration?.model ?? "No model (skipped)"}</span>
-          <span>{item.durationMs !== undefined ? formatDuration(item.durationMs) : "—"}</span>
+          <span title={usageTitle(item.usage)}>
+            {item.durationMs !== undefined ? formatDuration(item.durationMs) : "—"}
+            {item.usage?.totalTokens !== undefined ? ` · ${formatTokens(item.usage.totalTokens)}` : ""}
+            {item.usage?.estimatedCostMicroUsd !== undefined
+              ? ` · ${formatEstimatedCost(item.usage.estimatedCostMicroUsd)}`
+              : ""}
+          </span>
         </div>
       )) : <p className={styles.mutedResult}>Per-pass provenance was not included in this response.</p>}
     </div>
@@ -643,4 +650,32 @@ function formatDate(value: string) {
 function formatDuration(milliseconds: number) {
   if (milliseconds < 1_000) return `${milliseconds} ms`;
   return `${(milliseconds / 1_000).toFixed(1)} s`;
+}
+
+function formatTokens(tokens: number) {
+  return `${new Intl.NumberFormat("en-NZ", { notation: "compact", maximumFractionDigits: 1 }).format(tokens)} tok`;
+}
+
+function formatEstimatedCost(microUsd: number) {
+  return new Intl.NumberFormat("en-NZ", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 6,
+  }).format(microUsd / 1_000_000);
+}
+
+function usageTitle(usage: PassProvenance["usage"]) {
+  if (!usage) return "No usage metadata was recorded.";
+  const parts = [
+    usage.inputTokens !== undefined ? `${usage.inputTokens} input tokens` : null,
+    usage.cachedInputTokens ? `${usage.cachedInputTokens} cached` : null,
+    usage.cacheWriteInputTokens ? `${usage.cacheWriteInputTokens} cache-write` : null,
+    usage.outputTokens !== undefined ? `${usage.outputTokens} output tokens` : null,
+    usage.reasoningOutputTokens ? `${usage.reasoningOutputTokens} reasoning` : null,
+    usage.estimatedCostMicroUsd !== undefined
+      ? `${formatEstimatedCost(usage.estimatedCostMicroUsd)} estimated`
+      : "unpriced",
+  ];
+  return parts.filter(Boolean).join(" · ");
 }

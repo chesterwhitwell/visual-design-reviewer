@@ -12,6 +12,7 @@ import { AppError } from "@/lib/http/errors";
 import type {
   AnalysisImageInput,
   ModelGateway,
+  ModelResponseMetadata,
   StructuredModelResult,
 } from "@/lib/openai";
 import {
@@ -88,6 +89,7 @@ export type PipelineAttemptFailed = {
   durationMs: number;
   error: SafeAnalysisError;
   semanticIssuePaths?: string[];
+  responseMetadata?: ModelResponseMetadata;
 };
 
 export type PipelineObserver = {
@@ -373,6 +375,7 @@ async function executeStage<TTransportSchema extends z.ZodType, TDomain>(
     const startedAt = new Date(started).toISOString();
     await execution.observer?.onAttemptStarted?.({ passId, attemptNumber, startedAt });
 
+    let responseMetadata: ModelResponseMetadata | undefined;
     try {
       const result = await execution.gateway.runStructured({
         passId,
@@ -386,6 +389,9 @@ async function executeStage<TTransportSchema extends z.ZodType, TDomain>(
         reasoningEffort: configuration.modelConfiguration.reasoningEffort,
         maxOutputTokens: snapshot.operationalLimits.maximumOutputTokensPerPass,
         signal: execution.signal,
+        onResponseMetadata: (metadata) => {
+          responseMetadata = metadata;
+        },
       });
       const materialised = options.materialise(result.data);
       const output = options.validate(materialised);
@@ -410,6 +416,7 @@ async function executeStage<TTransportSchema extends z.ZodType, TDomain>(
         failedAt: new Date(failed).toISOString(),
         durationMs: failed - started,
         error: safeError,
+        ...(responseMetadata ? { responseMetadata } : {}),
         ...(error instanceof ReferenceValidationError
           ? {
               semanticIssuePaths: [

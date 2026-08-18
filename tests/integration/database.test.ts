@@ -46,6 +46,7 @@ describe("SQLite persistence", () => {
         "analysis_passes",
         "analysis_runs",
         "app_settings",
+        "auth_sessions",
         "criteria",
         "criteria_analyses",
         "criteria_sets",
@@ -122,10 +123,21 @@ describe("SQLite persistence", () => {
           "utf8",
         ),
       );
+      upgradeHandle.sqlite.exec(
+        readFileSync(
+          join(process.cwd(), "lib/db/migrations/0004_aromatic_wendigo.sql"),
+          "utf8",
+        ),
+      );
       const row = upgradeHandle.sqlite.prepare(
         "select analysis_role from review_image_revision_items where revision_id = ?",
       ).get("revision-old") as { analysis_role: string };
       expect(row.analysis_role).toBe("final_work");
+      expect(
+        upgradeHandle.sqlite.prepare(
+          "select name from sqlite_master where type = 'table' and name = 'auth_sessions'",
+        ).get(),
+      ).toMatchObject({ name: "auth_sessions" });
       expect(() =>
         upgradeHandle.sqlite.prepare(
           "update review_image_revision_items set analysis_role = ? where revision_id = ?",
@@ -301,6 +313,11 @@ describe("SQLite persistence", () => {
       failure: { code: "rate_limit", message: "The model service asked us to retry later." },
       durationMs: 123,
       apiStatusCode: 429,
+      usage: {
+        inputTokens: 4,
+        outputTokens: 2,
+        totalTokens: 6,
+      },
     });
     repositories.analysisRuns.transitionRun("run-1", "failed", {
       code: "pass_failed",
@@ -327,7 +344,16 @@ describe("SQLite persistence", () => {
       validatedOutput: { evidence: [] },
       durationMs: 88,
       apiRequestId: "request-safe-id",
-      usage: { inputTokens: 10, outputTokens: 4, totalTokens: 14 },
+      usage: {
+        inputTokens: 10,
+        cachedInputTokens: 2,
+        cacheWriteInputTokens: 1,
+        outputTokens: 4,
+        reasoningOutputTokens: 3,
+        totalTokens: 14,
+        estimatedCostMicroUsd: 42,
+        pricingSnapshot: { catalogVersion: "test-v1", currency: "USD" },
+      },
     });
     repositories.analysisRuns.skipPass("pass-d3");
 
@@ -337,7 +363,30 @@ describe("SQLite persistence", () => {
       "completed",
     ]);
     expect(detail?.passes[0]?.attempts[1]?.validatedOutput).toEqual({ evidence: [] });
+    expect(detail?.passes[0]?.attempts[1]).toMatchObject({
+      cachedInputTokens: 2,
+      cacheWriteInputTokens: 1,
+      reasoningOutputTokens: 3,
+      estimatedCostMicroUsd: 42,
+      pricingSnapshot: { catalogVersion: "test-v1", currency: "USD" },
+    });
     expect(detail?.passes[1]?.state).toBe("skipped");
+    expect(repositories.analysisRuns.getUsageByReview("review-1")).toEqual({
+      reviewId: "review-1",
+      totalTokens: 20,
+      estimatedCostMicroUsd: 42,
+      meteredAttempts: 2,
+      unpricedAttempts: 1,
+    });
+    expect(repositories.analysisRuns.listUsageByReviewIds(["review-1", "missing-review"])).toEqual([
+      {
+        reviewId: "review-1",
+        totalTokens: 20,
+        estimatedCostMicroUsd: 42,
+        meteredAttempts: 2,
+        unpricedAttempts: 1,
+      },
+    ]);
     expect(() => repositories.analysisRuns.transitionPass("pass-d1", "running")).toThrow(
       InvalidStateTransitionError,
     );

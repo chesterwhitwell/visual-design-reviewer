@@ -23,19 +23,26 @@ export type StructuredModelRequest<TSchema extends z.ZodType> = {
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  onResponseMetadata?: (metadata: ModelResponseMetadata) => void;
 };
 
 export type ModelUsage = {
   inputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteInputTokens?: number;
   outputTokens?: number;
+  reasoningOutputTokens?: number;
   totalTokens?: number;
 };
 
-export type StructuredModelResult<T> = {
-  data: T;
+export type ModelResponseMetadata = {
   model: string;
   requestId?: string;
   usage?: ModelUsage;
+};
+
+export type StructuredModelResult<T> = ModelResponseMetadata & {
+  data: T;
 };
 
 export interface ModelGateway {

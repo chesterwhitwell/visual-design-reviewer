@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/http/errors";
 import { getRuntimeConfig } from "@/lib/config/runtime";
+import { requireAuthenticatedRequest, type AuthPrincipal } from "@/lib/auth";
 
 function normaliseHost(value: string): string {
   return value.trim().toLowerCase();
@@ -18,7 +19,7 @@ function isAllowedHost(host: string, allowedHosts: string[]): boolean {
   return allowedHosts.includes(normalised) || allowedHosts.includes(hostname);
 }
 
-export function assertTrustedRequest(request: Request, mutation = false): void {
+export function assertTrustedOrigin(request: Request, mutation = false): void {
   const config = getRuntimeConfig();
   const requestUrl = new URL(request.url);
   const host = request.headers.get("host") ?? requestUrl.host;
@@ -53,4 +54,9 @@ export function assertTrustedRequest(request: Request, mutation = false): void {
   ) {
     throw new AppError("forbidden", "Cross-origin requests are not allowed.");
   }
+}
+
+export function assertTrustedRequest(request: Request, mutation = false): AuthPrincipal {
+  assertTrustedOrigin(request, mutation);
+  return requireAuthenticatedRequest(request);
 }

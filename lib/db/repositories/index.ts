@@ -1,5 +1,6 @@
 import type { AppDatabase } from "../client";
 import { getDatabase } from "../client";
+import { AuthSessionRepository } from "./auth-sessions";
 import { AnalysisArtifactRepository } from "./artifacts";
 import { AnalysisRunRepository } from "./analysis-runs";
 import { CriteriaSetRepository } from "./criteria-sets";
@@ -9,6 +10,7 @@ import { SettingsRepository } from "./settings";
 
 export * from "./analysis-runs";
 export * from "./artifacts";
+export * from "./auth-sessions";
 export * from "./criteria-sets";
 export * from "./errors";
 export * from "./reviews";
@@ -20,6 +22,7 @@ export interface Repositories {
   analysisArtifacts: AnalysisArtifactRepository;
   criteriaSets: CriteriaSetRepository;
   settings: SettingsRepository;
+  authSessions: AuthSessionRepository;
 }
 
 export function createRepositories(
@@ -32,5 +35,6 @@ export function createRepositories(
     analysisArtifacts: new AnalysisArtifactRepository(db, dependencies),
     criteriaSets: new CriteriaSetRepository(db, dependencies),
     settings: new SettingsRepository(db, dependencies),
+    authSessions: new AuthSessionRepository(db, dependencies),
   };
 }

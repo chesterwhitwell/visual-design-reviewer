@@ -4,7 +4,9 @@ export type AppErrorCode =
   | "bad_request"
   | "not_found"
   | "conflict"
+  | "unauthorized"
   | "forbidden"
+  | "rate_limited"
   | "configuration_error"
   | "image_invalid"
   | "image_missing"
@@ -22,7 +24,9 @@ const statusByCode: Record<AppErrorCode, number> = {
   bad_request: 400,
   not_found: 404,
   conflict: 409,
+  unauthorized: 401,
   forbidden: 403,
+  rate_limited: 429,
   configuration_error: 503,
   image_invalid: 422,
   image_missing: 409,

@@ -75,7 +75,13 @@ export function updateReview(reviewId: string, input: unknown) {
 
 export function listReviewSummaries() {
   const repositories = createRepositories();
-  return repositories.reviews.list().map((review) => {
+  const reviews = repositories.reviews.list();
+  const usageByReviewId = new Map(
+    repositories.analysisRuns
+      .listUsageByReviewIds(reviews.map(({ id }) => id))
+      .map((usage) => [usage.reviewId, usage]),
+  );
+  return reviews.map((review) => {
     const revision = repositories.reviews.getLatestImageRevision(review.id);
     const designAnalyses = repositories.analysisArtifacts.listDesignAnalyses(review.id);
     const criteriaAnalyses = repositories.analysisArtifacts.listCriteriaAnalyses(review.id);
@@ -86,6 +92,7 @@ export function listReviewSummaries() {
       imageCount: revision?.images.length ?? 0,
       designAnalysisCount: designAnalyses.length,
       criteriaAnalysisCount: criteriaAnalyses.length,
+      analysisUsage: usageDto(usageByReviewId.get(review.id)),
       updatedAt: review.updatedAt,
     };
   });
@@ -110,6 +117,7 @@ export function getReviewDetail(reviewId: string) {
     lifecycle: aggregate.review.lifecycle,
     createdAt: aggregate.review.createdAt,
     updatedAt: aggregate.review.updatedAt,
+    analysisUsage: usageDto(repositories.analysisRuns.getUsageByReview(reviewId)),
     images:
       aggregate.imageRevision?.images.map(({ asset, position, imageLabel, analysisRole }) => ({
         id: asset.id,
@@ -186,6 +194,24 @@ export function getReviewDetail(reviewId: string) {
         })),
       })),
     })),
+  };
+}
+
+function usageDto(
+  usage:
+    | {
+        totalTokens: number;
+        estimatedCostMicroUsd: number;
+        meteredAttempts: number;
+        unpricedAttempts: number;
+      }
+    | undefined,
+) {
+  return {
+    totalTokens: usage?.totalTokens ?? 0,
+    estimatedCostMicroUsd: usage?.estimatedCostMicroUsd ?? 0,
+    meteredAttempts: usage?.meteredAttempts ?? 0,
+    unpricedAttempts: usage?.unpricedAttempts ?? 0,
   };
 }
 

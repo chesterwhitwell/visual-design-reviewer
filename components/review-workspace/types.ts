@@ -155,8 +155,12 @@ export type PassProvenance = {
   };
   usage?: {
     inputTokens?: number;
+    cachedInputTokens?: number;
+    cacheWriteInputTokens?: number;
     outputTokens?: number;
+    reasoningOutputTokens?: number;
     totalTokens?: number;
+    estimatedCostMicroUsd?: number;
   };
 };
 
@@ -275,6 +279,12 @@ export type Review = {
   context?: string | null;
   lifecycle: "active" | "closed";
   updatedAt: string;
+  analysisUsage: {
+    totalTokens: number;
+    estimatedCostMicroUsd: number;
+    meteredAttempts: number;
+    unpricedAttempts: number;
+  };
   imageRevisionId?: string | null;
   images: ReviewImage[];
   taxonomy: Taxonomy;
