@@ -14,6 +14,7 @@ import {
   parseDesignAnalysisRow,
   parseRunSnapshot,
 } from "@/lib/application/analysis";
+import { saveAnalysisModelSettings } from "@/lib/application/analysis-settings";
 import { resetRuntimeConfigForTests } from "@/lib/config/runtime";
 import {
   closeDatabase,
@@ -193,6 +194,70 @@ describe("analysis application snapshots", () => {
         .prepare("update analysis_runs set image_revision_id = ? where id = ?")
         .run("revision-2", created.id),
     ).toThrow(/immutable/i);
+  });
+
+  it("uses saved model settings for new runs while preserving earlier snapshots", () => {
+    repositories.reviews.create({ id: "review-model-settings" });
+    addImageRevision(
+      repositories,
+      "review-model-settings",
+      "image-model-settings",
+      "revision-model-settings",
+      "a",
+    );
+    repositories.reviews.replaceReviewAreaSelections("review-model-settings", [
+      areaSelection("focus"),
+    ]);
+    saveAnalysisModelSettings(
+      {
+        visionModel: "gpt-5.6-sol",
+        synthesisModel: "gpt-5.6-luna",
+        reasoningEffort: "low",
+      },
+      repositories,
+    );
+    delete process.env.OPENAI_VISION_MODEL;
+    delete process.env.OPENAI_SYNTHESIS_MODEL;
+    delete process.env.OPENAI_REASONING_EFFORT;
+    resetRuntimeConfigForTests();
+
+    const firstRun = enqueueDesignAnalysis("review-model-settings");
+    const first = parseRunSnapshot(firstRun);
+    expect(first.passConfigurations.map(({ passId, modelConfiguration }) => [
+      passId,
+      modelConfiguration.model,
+      modelConfiguration.reasoningEffort,
+    ])).toEqual([
+      ["D1", "gpt-5.6-sol", "low"],
+      ["D2", "gpt-5.6-sol", "low"],
+      ["D3", "gpt-5.6-sol", "low"],
+      ["D4", "gpt-5.6-sol", "low"],
+      ["D5", "gpt-5.6-sol", "low"],
+      ["D6", "gpt-5.6-luna", "low"],
+    ]);
+
+    saveAnalysisModelSettings(
+      {
+        visionModel: "gpt-5.6-terra",
+        synthesisModel: "gpt-5.6-terra",
+        reasoningEffort: "high",
+      },
+      repositories,
+    );
+
+    expect(
+      parseRunSnapshot(repositories.analysisRuns.requireById(firstRun.id))
+        .passConfigurations[0]?.modelConfiguration,
+    ).toMatchObject({
+      model: "gpt-5.6-sol",
+      reasoningEffort: "low",
+    });
+    const second = parseRunSnapshot(enqueueDesignAnalysis("review-model-settings"));
+    expect(second.passConfigurations[0]?.modelConfiguration).toMatchObject({
+      model: "gpt-5.6-terra",
+      reasoningEffort: "high",
+    });
+    expect(second.passConfigurations[5]?.modelConfiguration.model).toBe("gpt-5.6-terra");
   });
 
   it("binds Criteria Analysis to the selected Design Analysis inputs and current rubric", () => {

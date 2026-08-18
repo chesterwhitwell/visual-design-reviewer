@@ -265,8 +265,6 @@ describe("analysis pipeline orchestration", () => {
       NODE_ENV: "test",
       ANALYSIS_GATEWAY: "openai",
       OPENAI_API_KEY: "test-key",
-      OPENAI_VISION_MODEL: "current-vision-model",
-      OPENAI_SYNTHESIS_MODEL: "current-synthesis-model",
       MODEL_REQUEST_TIMEOUT_MS: "999",
     });
 
@@ -275,6 +273,8 @@ describe("analysis pipeline orchestration", () => {
     expect(currentConfig.modelRequestTimeoutMs).toBe(999);
     expect(options.timeoutMs).toBe(snapshot.operationalLimits.passTimeoutMs);
     expect(options.timeoutMs).not.toBe(currentConfig.modelRequestTimeoutMs);
+    expect(options.visionModel).toBe("configured-model");
+    expect(options.synthesisModel).toBe("configured-model");
   });
 });
 

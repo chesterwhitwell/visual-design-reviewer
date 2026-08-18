@@ -25,6 +25,10 @@ import {
 } from "@/lib/db";
 import { getRuntimeConfig, type RuntimeConfig } from "@/lib/config/runtime";
 import {
+  getEffectiveAnalysisModelSettings,
+  type AnalysisModelSettings,
+} from "@/lib/application/analysis-settings";
+import {
   PASS_SCHEMA_VERSION as CURRENT_PASS_SCHEMA_VERSION,
   getPromptDefinition,
 } from "@/lib/analysis/prompts";
@@ -62,7 +66,7 @@ export function enqueueDesignAnalysis(
     );
   }
 
-  const config = requireLiveAnalysisConfiguration();
+  const configuration = requireLiveAnalysisConfiguration();
   const taxonomy = getTaxonomyConfig();
   const reviewAreas = aggregate.reviewAreas
     .filter(({ mode }) => mode !== "off")
@@ -97,8 +101,12 @@ export function enqueueDesignAnalysis(
       analysisRole,
     })),
     reviewAreas,
-    passConfigurations: buildPassConfigurations(DESIGN_PASS_IDS, config),
-    operationalLimits: buildOperationalLimits(config, DESIGN_PASS_IDS.length),
+    passConfigurations: buildPassConfigurations(
+      DESIGN_PASS_IDS,
+      configuration.models,
+      configuration.runtime.openaiImageDetail,
+    ),
+    operationalLimits: buildOperationalLimits(configuration.runtime, DESIGN_PASS_IDS.length),
     capturedAt: new Date().toISOString(),
   });
 
@@ -148,7 +156,7 @@ export function enqueueCriteriaAnalysis(
       })),
     })),
   );
-  const config = requireLiveAnalysisConfiguration();
+  const configuration = requireLiveAnalysisConfiguration();
   const designSnapshot = selectedDesign.inputSnapshot;
   const snapshot = CriteriaAnalysisInputSnapshotSchema.parse({
     kind: "criteria",
@@ -160,8 +168,12 @@ export function enqueueCriteriaAnalysis(
     images: designSnapshot.images,
     reviewAreas: designSnapshot.reviewAreas,
     criteria,
-    passConfigurations: buildPassConfigurations(CRITERIA_PASS_IDS, config),
-    operationalLimits: buildOperationalLimits(config, CRITERIA_PASS_IDS.length),
+    passConfigurations: buildPassConfigurations(
+      CRITERIA_PASS_IDS,
+      configuration.models,
+      configuration.runtime.openaiImageDetail,
+    ),
+    operationalLimits: buildOperationalLimits(configuration.runtime, CRITERIA_PASS_IDS.length),
     capturedAt: new Date().toISOString(),
   });
   assertCriteriaSnapshotMatchesDesignSnapshot(snapshot, designSnapshot);
@@ -332,22 +344,20 @@ export function analysisRunDto(detail: AnalysisRunDetail) {
 
 function buildPassConfigurations(
   passIds: readonly AnalysisPassId[],
-  config: RuntimeConfig,
+  settings: AnalysisModelSettings,
+  imageDetail: RuntimeConfig["openaiImageDetail"],
 ): PassConfigurationSnapshot[] {
   return passIds.map((passId) => {
     const prompt = getPromptDefinition(passId);
     const model =
-      prompt.modelRole === "vision" ? config.openaiVisionModel : config.openaiSynthesisModel;
-    if (!model) {
-      throw new AppError("configuration_error", "The required OpenAI model is not configured.");
-    }
+      prompt.modelRole === "vision" ? settings.visionModel : settings.synthesisModel;
     return {
       passId,
       modelConfiguration: {
         provider: "openai" as const,
         model,
-        ...(prompt.requiresImages ? { imageDetail: config.openaiImageDetail } : {}),
-        reasoningEffort: config.openaiReasoningEffort,
+        ...(prompt.requiresImages ? { imageDetail } : {}),
+        reasoningEffort: settings.reasoningEffort,
         store: false as const,
       },
       promptVersion: prompt.version,
@@ -375,21 +385,32 @@ function buildOperationalLimits(config: RuntimeConfig, passCount: number) {
   };
 }
 
-function requireLiveAnalysisConfiguration(): RuntimeConfig {
-  const config = getRuntimeConfig();
-  if (config.analysisGateway === "fake") {
+function requireLiveAnalysisConfiguration(): {
+  runtime: RuntimeConfig;
+  models: AnalysisModelSettings;
+} {
+  const runtime = getRuntimeConfig();
+  if (runtime.analysisGateway === "fake") {
     throw new AppError(
       "configuration_error",
       "The explicit test gateway cannot create saved review findings. Select the OpenAI gateway to run analysis.",
     );
   }
-  if (!config.openaiApiKey || !config.openaiVisionModel || !config.openaiSynthesisModel) {
+  const effective = getEffectiveAnalysisModelSettings(runtime);
+  if (!runtime.openaiApiKey || !effective.visionModel || !effective.synthesisModel) {
     throw new AppError(
       "configuration_error",
-      "OPENAI_API_KEY, OPENAI_VISION_MODEL, and OPENAI_SYNTHESIS_MODEL must be configured on the server.",
+      "An OpenAI API key and both analysis models must be configured.",
     );
   }
-  return config;
+  return {
+    runtime,
+    models: {
+      visionModel: effective.visionModel,
+      synthesisModel: effective.synthesisModel,
+      reasoningEffort: effective.reasoningEffort,
+    },
+  };
 }
 
 function requireRunDetail(runId: string): AnalysisRunDetail {

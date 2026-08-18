@@ -1091,6 +1091,83 @@ p {
   text-align: right;
 }
 
+.model-settings-form {
+  border-top: 1px solid #eceee9;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 2px;
+  padding-top: 18px;
+}
+
+.model-setting-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.model-setting-field > span {
+  align-items: center;
+  color: var(--ink-muted);
+  display: flex;
+  font-size: 12px;
+  gap: 7px;
+}
+
+.model-setting-field input,
+.model-setting-field select {
+  background: #fbfcfa;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  min-height: 42px;
+  padding: 9px 11px;
+  width: 100%;
+}
+
+.model-setting-field input:focus,
+.model-setting-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(24, 107, 91, 0.12);
+  outline: none;
+}
+
+.setting-source {
+  background: #eff1ed;
+  border-radius: 999px;
+  color: var(--ink-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 3px 6px;
+  text-transform: uppercase;
+}
+
+.setting-source-application {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.setting-source-missing {
+  background: var(--focus-soft);
+  color: #774b13;
+}
+
+.model-settings-help {
+  color: var(--ink-faint);
+  font-size: 11px;
+  margin: 13px 0 0;
+}
+
+.model-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin-top: 20px;
+}
+
 .privacy-callout {
   background: #f3f5f1;
   border-left: 3px solid var(--accent);
@@ -1146,5 +1223,9 @@ p {
 
   .limits-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .model-settings-form {
+    grid-template-columns: 1fr;
   }
 }

@@ -10,6 +10,11 @@ import { POST as logout } from "@/app/api/auth/logout/route";
 import { GET as adminOverview } from "@/app/api/admin/overview/route";
 import { GET as exportDiagnostics } from "@/app/api/admin/diagnostics/export/route";
 import { GET as listReviews } from "@/app/api/reviews/route";
+import { GET as settingsStatus } from "@/app/api/settings/status/route";
+import {
+  DELETE as resetAnalysisSettings,
+  PUT as updateAnalysisSettings,
+} from "@/app/api/settings/analysis/route";
 import { hashPassword } from "@/lib/auth/password";
 import { resetLoginRateLimitForTests } from "@/lib/auth/rate-limit";
 import { resetRuntimeConfigForTests } from "@/lib/config/runtime";
@@ -28,6 +33,9 @@ const environmentKeys = [
   "AUTH_SESSION_HOURS",
   "AUTH_COOKIE_SECURE",
   "OPENAI_PRICING_PATH",
+  "OPENAI_VISION_MODEL",
+  "OPENAI_SYNTHESIS_MODEL",
+  "OPENAI_REASONING_EFFORT",
 ] as const;
 
 describe("password authentication and administration", () => {
@@ -51,6 +59,9 @@ describe("password authentication and administration", () => {
     process.env.AUTH_SESSION_HOURS = "12";
     process.env.AUTH_COOKIE_SECURE = "auto";
     process.env.OPENAI_PRICING_PATH = join(process.cwd(), "config/openai-pricing.v1.json");
+    process.env.OPENAI_VISION_MODEL = "environment-vision";
+    process.env.OPENAI_SYNTHESIS_MODEL = "environment-synthesis";
+    process.env.OPENAI_REASONING_EFFORT = "medium";
     resetState();
   });
 
@@ -115,6 +126,76 @@ describe("password authentication and administration", () => {
     expect(exportedText).toContain('"path":"[redacted]"');
     expect(exportedText).not.toContain(directory);
   });
+
+  it("stores authenticated model settings and restores environment defaults", async () => {
+    const unauthenticated = await updateAnalysisSettings(jsonMutationRequest(
+      "/api/settings/analysis",
+      {
+        visionModel: "gpt-5.6-sol",
+        synthesisModel: "gpt-5.6-luna",
+        reasoningEffort: "low",
+      },
+    ));
+    expect(unauthenticated.status).toBe(401);
+
+    const accepted = await login(loginRequest("correct horse battery staple"));
+    const cookie = (accepted.headers.get("set-cookie") ?? "").split(";")[0];
+    const saved = await updateAnalysisSettings(jsonMutationRequest(
+      "/api/settings/analysis",
+      {
+        visionModel: "gpt-5.6-sol",
+        synthesisModel: "gpt-5.6-luna",
+        reasoningEffort: "low",
+      },
+      cookie,
+    ));
+    expect(saved.status).toBe(200);
+
+    const status = await settingsStatus(readRequest("/api/settings/status", cookie));
+    await expect(status.json()).resolves.toMatchObject({
+      visionModel: "gpt-5.6-sol",
+      synthesisModel: "gpt-5.6-luna",
+      reasoningEffort: "low",
+      savedModelSettings: true,
+      modelSettingSources: {
+        visionModel: "application",
+        synthesisModel: "application",
+        reasoningEffort: "application",
+      },
+    });
+
+    const invalid = await updateAnalysisSettings(jsonMutationRequest(
+      "/api/settings/analysis",
+      {
+        visionModel: "gpt-5.6-sol",
+        synthesisModel: "gpt-5.6-luna",
+        reasoningEffort: "minimal",
+      },
+      cookie,
+    ));
+    expect(invalid.status).toBe(400);
+
+    const reset = await resetAnalysisSettings(new Request(
+      "http://localhost/api/settings/analysis",
+      {
+        method: "DELETE",
+        headers: {
+          cookie,
+          origin: "http://localhost",
+          "x-vdr-request": "1",
+        },
+      },
+    ));
+    expect(reset.status).toBe(200);
+    await expect(reset.json()).resolves.toMatchObject({
+      settings: {
+        visionModel: "environment-vision",
+        synthesisModel: "environment-synthesis",
+        reasoningEffort: "medium",
+        savedOverride: false,
+      },
+    });
+  });
 });
 
 function readRequest(path: string, cookie?: string) {
@@ -141,6 +222,19 @@ function loginRequest(password: string) {
       "content-type": "application/json",
     },
     body: JSON.stringify({ username: "admin", password }),
+  });
+}
+
+function jsonMutationRequest(path: string, body: unknown, cookie?: string) {
+  return new Request(`http://localhost${path}`, {
+    method: "PUT",
+    headers: {
+      origin: "http://localhost",
+      "x-vdr-request": "1",
+      "content-type": "application/json",
+      ...(cookie ? { cookie } : {}),
+    },
+    body: JSON.stringify(body),
   });
 }
 

@@ -1,4 +1,5 @@
 export * from "./analysis";
+export * from "./analysis-settings";
 export * from "./criteria-sets";
 export * from "./exports";
 export * from "./images";

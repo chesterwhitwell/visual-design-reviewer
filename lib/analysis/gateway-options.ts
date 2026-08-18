@@ -14,22 +14,30 @@ export function buildOpenAIGatewayOptions(
   snapshot: AnalysisInputSnapshot,
   config: RuntimeConfig,
 ): OpenAIModelGatewayOptions {
-  if (
-    config.analysisGateway !== "openai" ||
-    !config.openaiApiKey ||
-    !config.openaiVisionModel ||
-    !config.openaiSynthesisModel
-  ) {
+  const visionModel = snapshot.passConfigurations.find(
+    ({ modelConfiguration }) => Boolean(modelConfiguration.imageDetail),
+  )?.modelConfiguration.model;
+  const synthesisModel = snapshot.passConfigurations.find(
+    ({ modelConfiguration }) => !modelConfiguration.imageDetail,
+  )?.modelConfiguration.model;
+
+  if (config.analysisGateway !== "openai" || !config.openaiApiKey) {
     throw new AppError(
       "configuration_error",
-      "A live OpenAI gateway and both analysis models must be configured.",
+      "A live OpenAI gateway and API key must be configured.",
+    );
+  }
+  if (!visionModel || !synthesisModel) {
+    throw new AppError(
+      "configuration_error",
+      "The immutable run snapshot must contain both analysis models.",
     );
   }
 
   return {
     apiKey: config.openaiApiKey,
-    visionModel: config.openaiVisionModel,
-    synthesisModel: config.openaiSynthesisModel,
+    visionModel,
+    synthesisModel,
     timeoutMs: snapshot.operationalLimits.passTimeoutMs,
     maxRetries: 0,
   };
