@@ -46,15 +46,13 @@ For container deployment, Docker Engine with Docker Compose is sufficient.
 
    Put the complete output in `IMAGE_ENCRYPTION_KEY`. It must decode to exactly 32 bytes. Keep this key stable and backed up separately from the database: changing or losing it makes retained images unreadable. Completed textual analyses remain usable.
 
-3. Add the required OpenAI settings to `.env`:
+3. Add the required server-side OpenAI key to `.env`:
 
    ```dotenv
    OPENAI_API_KEY=your_server_side_key
-   OPENAI_VISION_MODEL=gpt-5.6-terra
-   OPENAI_SYNTHESIS_MODEL=gpt-5.6-terra
    ```
 
-   `gpt-5.6-terra` is a reasonable balanced starting point. Model access and rate limits depend on the API project, so use the Settings page connection test before analysis. The model IDs are configuration, not domain logic. OpenAI's current model guidance describes Sol as the flagship tier, Terra as the intelligence/cost balance, and Luna for cost-sensitive high-volume work: [OpenAI model documentation](https://developers.openai.com/api/docs/models).
+   The API key remains environment-only and is never returned to the browser or stored in application settings.
 
 4. Install dependencies and initialise the database:
 
@@ -69,7 +67,7 @@ For container deployment, Docker Engine with Docker Compose is sufficient.
    npm run dev
    ```
 
-6. Open <http://127.0.0.1:3080>. Visit **Settings** first to confirm that the API key, both models, and image-encryption key are present, then run the live connection test.
+6. Open <http://127.0.0.1:3080>. Visit **Settings**, choose the vision model, synthesis model, and reasoning effort, save them, then run the live connection test. `gpt-5.6-terra` is a reasonable balanced starting point. OpenAI's current model guidance describes Sol as the flagship tier, Terra as the intelligence/cost balance, and Luna for cost-sensitive high-volume work: [OpenAI model documentation](https://developers.openai.com/api/docs/models).
 
 The application also applies pending migrations on its first database access. Running `npm run db:migrate` explicitly makes setup failures easier to diagnose.
 
@@ -141,18 +139,20 @@ Google or other OpenID Connect login is not implemented yet. The current session
 
 ## OpenAI model and data configuration
 
-The main model settings are:
+The main model settings are editable from **Settings** and stored in the local SQLite database. Saved application values take precedence over optional environment fallbacks and survive container replacement through the `/app/data` volume. Removing a saved override restores the environment value, or the built-in default for reasoning effort.
 
-| Variable | Purpose |
-| --- | --- |
-| `OPENAI_VISION_MODEL` | Image-input model used by passes that inspect the supplied work. |
-| `OPENAI_SYNTHESIS_MODEL` | Model used by text-only adjudication and synthesis passes. |
-| `OPENAI_IMAGE_DETAIL` | `low`, `auto`, `high`, or `original`, subject to model support. |
-| `OPENAI_REASONING_EFFORT` | `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max`, subject to model support. |
-| `MODEL_REQUEST_TIMEOUT_MS` | Timeout for one model request. |
-| `MODEL_SCHEMA_RETRIES` | Bounded retries after invalid structured output. |
-| `MAX_OUTPUT_TOKENS_PER_PASS` | Server-enforced output cap for each pass. |
-| `ANALYSIS_LEASE_MS` | Lease duration used by the durable local analysis worker. |
+| Setting | Optional environment fallback | Purpose |
+| --- | --- | --- |
+| Vision model | `OPENAI_VISION_MODEL` | Image-input model used by passes that inspect the supplied work. |
+| Synthesis model | `OPENAI_SYNTHESIS_MODEL` | Model used by text-only synthesis passes. |
+| Reasoning effort | `OPENAI_REASONING_EFFORT` | Reasoning level used for model passes, subject to model support. |
+| Image detail | `OPENAI_IMAGE_DETAIL` | `low`, `auto`, `high`, or `original`, subject to model support. |
+| Request timeout | `MODEL_REQUEST_TIMEOUT_MS` | Timeout for one model request. |
+| Schema retries | `MODEL_SCHEMA_RETRIES` | Bounded retries after invalid structured output. |
+| Output limit | `MAX_OUTPUT_TOKENS_PER_PASS` | Server-enforced output cap for each pass. |
+| Worker lease | `ANALYSIS_LEASE_MS` | Lease duration used by the durable local analysis worker. |
+
+The remaining rows are environment-only operational controls. GPT-5.6 supports `none`, `low`, `medium`, `high`, `xhigh`, and `max`; `minimal` remains available only for compatible legacy/custom model IDs. Each run captures an immutable copy of the effective models and reasoning effort, so later Settings changes affect only newly created analyses. For an existing Docker or Unraid installation, save the effective values in Settings and test both models before removing the three optional model variables from the container.
 
 Keep `OPENAI_API_KEY` server-side and never rename it with a `NEXT_PUBLIC_` prefix. The browser receives only a boolean indicating whether a key is configured.
 

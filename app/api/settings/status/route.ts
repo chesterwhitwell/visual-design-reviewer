@@ -1,8 +1,13 @@
 import { getRuntimeConfig } from "@/lib/config/runtime";
+import {
+  getEffectiveAnalysisModelSettings,
+  ReasoningEffortSchema,
+} from "@/lib/application/analysis-settings";
 import { listPromptDefinitions } from "@/lib/analysis/prompts";
 import { errorResponse, privateJson } from "@/lib/http/response";
 import { assertTrustedRequest } from "@/lib/security/request";
 import { getTaxonomyConfig } from "@/lib/taxonomy";
+import { getPricingCatalog } from "@/lib/openai/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -10,11 +15,12 @@ export async function GET(request: Request) {
   try {
     assertTrustedRequest(request);
     const config = getRuntimeConfig();
+    const modelSettings = getEffectiveAnalysisModelSettings(config);
     const taxonomy = getTaxonomyConfig();
     const missing: string[] = [];
     if (!config.openaiApiKey && config.analysisGateway === "openai") missing.push("API key");
-    if (!config.openaiVisionModel) missing.push("vision model");
-    if (!config.openaiSynthesisModel) missing.push("synthesis model");
+    if (!modelSettings.visionModel) missing.push("vision model");
+    if (!modelSettings.synthesisModel) missing.push("synthesis model");
     if (!config.imageEncryptionKey) missing.push("image encryption key");
     const ready = missing.length === 0;
 
@@ -29,10 +35,14 @@ export async function GET(request: Request) {
       gateway: config.analysisGateway,
       hasApiKey: Boolean(config.openaiApiKey),
       hasEncryptionKey: Boolean(config.imageEncryptionKey),
-      visionModel: config.openaiVisionModel ?? null,
-      synthesisModel: config.openaiSynthesisModel ?? null,
+      visionModel: modelSettings.visionModel || null,
+      synthesisModel: modelSettings.synthesisModel || null,
       imageDetail: config.openaiImageDetail,
-      reasoningEffort: config.openaiReasoningEffort,
+      reasoningEffort: modelSettings.reasoningEffort,
+      modelSettingSources: modelSettings.sources,
+      savedModelSettings: modelSettings.savedOverride,
+      availableModels: availableModels(),
+      reasoningEffortOptions: ReasoningEffortSchema.options,
       dataMode: config.openaiDataMode,
       retentionMode: "review_session",
       retentionHours: config.imageRetentionHours ?? null,
@@ -52,5 +62,13 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     return errorResponse(error);
+  }
+}
+
+function availableModels(): string[] {
+  try {
+    return getPricingCatalog().models.map(({ id }) => id);
+  } catch {
+    return [];
   }
 }

@@ -5,6 +5,7 @@ import { dirname, join, resolve } from "node:path";
 
 import packageMetadata from "@/package.json";
 import { getRuntimeConfig } from "@/lib/config/runtime";
+import { getEffectiveAnalysisModelSettings } from "@/lib/application/analysis-settings";
 import { createRepositories, getDatabaseHandle } from "@/lib/db";
 import { getPricingCatalog } from "@/lib/openai/pricing";
 import { getTaxonomyConfig } from "@/lib/taxonomy";
@@ -26,6 +27,7 @@ type UsageRow = {
 
 export function getAdminOverview(request: Request) {
   const config = getRuntimeConfig();
+  const modelSettings = getEffectiveAnalysisModelSettings(config);
   const handle = getDatabaseHandle();
   const sqlite = handle.sqlite;
   const now = new Date().toISOString();
@@ -92,8 +94,8 @@ export function getAdminOverview(request: Request) {
   const secureTransport = isSecureTransport(request, config.auth.trustProxyHeaders);
   const missingConfiguration = [
     ...(!config.openaiApiKey && config.analysisGateway === "openai" ? ["OpenAI API key"] : []),
-    ...(!config.openaiVisionModel ? ["Vision model"] : []),
-    ...(!config.openaiSynthesisModel ? ["Synthesis model"] : []),
+    ...(!modelSettings.visionModel ? ["Vision model"] : []),
+    ...(!modelSettings.synthesisModel ? ["Synthesis model"] : []),
     ...(!config.imageEncryptionKey ? ["Image encryption key"] : []),
     ...(config.auth.mode === "password" && !config.auth.passwordHash ? ["Password hash"] : []),
     ...(config.auth.mode === "password" && !config.auth.sessionSecret ? ["Session secret"] : []),
@@ -149,10 +151,11 @@ export function getAdminOverview(request: Request) {
       ready: missingConfiguration.length === 0,
       missing: missingConfiguration,
       gateway: config.analysisGateway,
-      visionModel: config.openaiVisionModel ?? null,
-      synthesisModel: config.openaiSynthesisModel ?? null,
+      visionModel: modelSettings.visionModel || null,
+      synthesisModel: modelSettings.synthesisModel || null,
       imageDetail: config.openaiImageDetail,
-      reasoningEffort: config.openaiReasoningEffort,
+      reasoningEffort: modelSettings.reasoningEffort,
+      modelSettingSources: modelSettings.sources,
       retentionHours: config.imageRetentionHours ?? null,
       taxonomy: { label: taxonomy.label, version: taxonomy.version, areas: taxonomy.areas.length },
       promptVersions: [...new Set(listPromptDefinitions().map(({ version }) => version))],

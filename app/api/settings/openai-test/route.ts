@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+import { readJsonBody } from "@/app/api/reviews/_request";
+import {
+  AnalysisModelSettingsSchema,
+  getEffectiveAnalysisModelSettings,
+} from "@/lib/application/analysis-settings";
 import { getRuntimeConfig } from "@/lib/config/runtime";
 import { AppError } from "@/lib/http/errors";
 import { errorResponse, privateJson } from "@/lib/http/response";
@@ -23,37 +28,60 @@ export async function POST(request: Request) {
         message: "The explicit test gateway is active; no OpenAI request was made.",
       });
     }
-    if (!config.openaiApiKey || !config.openaiVisionModel || !config.openaiSynthesisModel) {
+    const effective = getEffectiveAnalysisModelSettings(config);
+    const settings = request.body
+      ? AnalysisModelSettingsSchema.parse(await readJsonBody(request, 2 * 1024))
+      : AnalysisModelSettingsSchema.parse({
+          visionModel: effective.visionModel,
+          synthesisModel: effective.synthesisModel,
+          reasoningEffort: effective.reasoningEffort,
+        });
+    if (!config.openaiApiKey) {
       throw new AppError(
         "configuration_error",
-        "OPENAI_API_KEY, OPENAI_VISION_MODEL, and OPENAI_SYNTHESIS_MODEL must be configured on the server.",
+        "The OpenAI API key must be configured on the server.",
       );
     }
 
     const gateway = new OpenAIModelGateway({
       apiKey: config.openaiApiKey,
-      visionModel: config.openaiVisionModel,
-      synthesisModel: config.openaiSynthesisModel,
+      visionModel: settings.visionModel,
+      synthesisModel: settings.synthesisModel,
       timeoutMs: Math.min(config.modelRequestTimeoutMs, 30_000),
     });
-    const result = await gateway.runStructured({
-      passId: "connection-test",
-      schemaName: "connection_test",
-      schema: connectionTestSchema,
-      instructions:
-        "This is a server connectivity test. Return the requested status object and nothing else.",
-      input: { request: "Return status ready." },
-      modelRole: "synthesis",
-      reasoningEffort: "none",
-      maxOutputTokens: 64,
-    });
+    const configuredModels = settings.visionModel === settings.synthesisModel
+      ? [["synthesis", settings.synthesisModel] as const]
+      : [
+          ["vision", settings.visionModel] as const,
+          ["synthesis", settings.synthesisModel] as const,
+        ];
+    const results = [];
+    for (const [modelRole, model] of configuredModels) {
+      results.push(await gateway.runStructured({
+        passId: `connection-test-${modelRole}`,
+        schemaName: `connection_test_${modelRole}`,
+        schema: connectionTestSchema,
+        instructions:
+          "This is a server connectivity test. Return the requested status object and nothing else.",
+        input: { request: "Return status ready." },
+        modelRole,
+        model,
+        reasoningEffort: settings.reasoningEffort === "minimal" ? "minimal" : "none",
+        maxOutputTokens: 64,
+      }));
+    }
 
     return privateJson({
-      ok: result.data.status === "ready",
+      ok: results.every(({ data }) => data.status === "ready"),
       live: true,
-      model: result.model,
-      requestId: result.requestId ?? null,
-      message: "OpenAI connection succeeded with store disabled.",
+      models: results.map(({ model, requestId }) => ({
+        model,
+        requestId: requestId ?? null,
+      })),
+      message:
+        results.length === 1
+          ? "The configured OpenAI model responded successfully with store disabled."
+          : "Both OpenAI models responded successfully with store disabled.",
     });
   } catch (error) {
     return errorResponse(error);
